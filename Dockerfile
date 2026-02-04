@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.1.0-base-ubuntu22.04
+FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -9,8 +9,8 @@ RUN apt-get update && apt-get install -y \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Ollama manually (bypassing install script)
-RUN wget -O /usr/local/bin/ollama https://github.com/ollama/ollama/releases/download/v0.1.26/ollama-linux-amd64 && \
+# Install Ollama manually (latest version for better GPU support)
+RUN wget -O /usr/local/bin/ollama https://github.com/ollama/ollama/releases/download/v0.5.4/ollama-linux-amd64 && \
     chmod +x /usr/local/bin/ollama
 
 # Install Python dependencies
@@ -29,6 +29,11 @@ RUN ollama serve & \
 
 # Set working directory
 WORKDIR /
+
+# Set CUDA environment variables for Ollama GPU support
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
+ENV LD_LIBRARY_PATH=/usr/local/nvidia/lib:/usr/local/nvidia/lib64
 
 # Expose Ollama port (for debugging)
 EXPOSE 11434
