@@ -1,17 +1,18 @@
-FROM ollama/ollama:latest
+FROM nvidia/cuda:12.1.0-base-ubuntu22.04
 
-# Install Python and dependencies for RunPod handler
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
+    curl \
     python3 \
     python3-pip \
-    python3-venv \
-    curl \
-    build-essential \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Upgrade pip and install Python dependencies
-RUN python3 -m pip install --upgrade pip setuptools wheel
-RUN python3 -m pip install --no-cache-dir runpod==1.6.2 requests==2.31.0
+# Install Ollama
+RUN curl -fsSL https://ollama.com/install.sh | sh
+
+# Install Python dependencies
+RUN pip3 install --no-cache-dir runpod==1.6.2 requests==2.31.0
 
 # Copy handler script
 COPY handler.py /handler.py
