@@ -6,10 +6,12 @@ RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
     ca-certificates \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Ollama
-RUN curl -fsSL https://ollama.com/install.sh | sh
+# Install Ollama manually (bypassing install script)
+RUN wget -O /usr/local/bin/ollama https://github.com/ollama/ollama/releases/download/v0.1.26/ollama-linux-amd64 && \
+    chmod +x /usr/local/bin/ollama
 
 # Install Python dependencies
 RUN pip3 install --no-cache-dir runpod==1.6.2 requests==2.31.0
