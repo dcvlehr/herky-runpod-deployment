@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Ollama manually (latest version for better GPU support)
-RUN wget -O /usr/local/bin/ollama https://github.com/ollama/ollama/releases/download/v0.5.4/ollama-linux-amd64 && \
+RUN wget -O /usr/local/bin/ollama https://github.com/ollama/ollama/releases/download/v0.15.3/ollama-linux-amd64 && \
     chmod +x /usr/local/bin/ollama
 
 # Install Python dependencies
