@@ -13,13 +13,32 @@ import json
 
 # Start Ollama in background on first import
 print("Starting Ollama service...")
-ollama_process = subprocess.Popen(
-    ["/usr/local/bin/ollama", "serve"],
-    stdout=subprocess.PIPE,
-    stderr=subprocess.PIPE
-)
-time.sleep(5)  # Wait for Ollama to start
-print("Ollama service started")
+with open("/tmp/ollama.log", "w") as log_file:
+    ollama_process = subprocess.Popen(
+        ["/usr/local/bin/ollama", "serve"],
+        stdout=log_file,
+        stderr=subprocess.STDOUT,
+        env={**os.environ, "OLLAMA_HOST": "0.0.0.0:11434"}
+    )
+
+# Wait for Ollama to be ready
+max_retries = 30
+for i in range(max_retries):
+    try:
+        response = requests.get("http://localhost:11434/api/tags", timeout=1)
+        if response.status_code == 200:
+            print(f"Ollama service started and ready (attempt {i+1})")
+            break
+    except:
+        time.sleep(1)
+else:
+    print("WARNING: Ollama may not have started properly")
+    # Print logs for debugging
+    try:
+        with open("/tmp/ollama.log", "r") as f:
+            print("Ollama logs:", f.read())
+    except:
+        pass
 
 # Track if models are pulled
 models_pulled = False
@@ -88,10 +107,11 @@ def handler(job):
 
         # Call Ollama API
         print(f"Calling Ollama API: {endpoint}")
+        print(f"Payload: {payload}")
         response = requests.post(
             endpoint,
             json=payload,
-            timeout=30
+            timeout=60  # Increased timeout for inference
         )
 
         if response.status_code == 200:
