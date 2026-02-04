@@ -126,6 +126,15 @@ def handler(job):
     except Exception as e:
         error_msg = f"Handler error: {str(e)}"
         print(error_msg)
+
+        # Print Ollama logs for debugging
+        try:
+            with open("/tmp/ollama.log", "r") as f:
+                print("=== Ollama logs ===")
+                print(f.read())
+        except Exception as log_error:
+            print(f"Could not read Ollama logs: {log_error}")
+
         return {"error": error_msg}
 
 
