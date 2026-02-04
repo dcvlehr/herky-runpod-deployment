@@ -4,11 +4,14 @@ FROM ollama/ollama:latest
 RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
+    python3-venv \
     curl \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
-RUN pip3 install --no-cache-dir runpod requests
+# Upgrade pip and install Python dependencies
+RUN python3 -m pip install --upgrade pip setuptools wheel
+RUN python3 -m pip install --no-cache-dir runpod==1.6.2 requests==2.31.0
 
 # Copy handler script
 COPY handler.py /handler.py
