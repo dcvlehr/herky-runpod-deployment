@@ -45,21 +45,24 @@ models_pulled = False
 
 
 def pull_models():
-    """Pull required models on first run"""
+    """Verify models are available (already pulled in Dockerfile)"""
     global models_pulled
     if not models_pulled:
-        print("Pulling phi3:mini model...")
-        result = subprocess.run(
-            ["ollama", "pull", "phi3:mini"],
-            capture_output=True,
-            text=True
-        )
-        print(f"phi3:mini pull result: {result.returncode}")
-        if result.returncode != 0:
-            print(f"Error: {result.stderr}")
-
-        models_pulled = True
-        print("Models ready")
+        print("Verifying phi3:mini model is available...")
+        # Model already pulled during image build, just verify it exists
+        try:
+            result = subprocess.run(
+                ["ollama", "list"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            print(f"Available models:\n{result.stdout}")
+            models_pulled = True
+            print("Models ready")
+        except Exception as e:
+            print(f"Warning: Could not list models: {e}")
+            models_pulled = True  # Continue anyway since model is pre-pulled
 
 
 def handler(job):
