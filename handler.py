@@ -15,7 +15,7 @@ import json
 print("Starting Ollama service...")
 with open("/tmp/ollama.log", "w") as log_file:
     ollama_process = subprocess.Popen(
-        ["/usr/local/bin/ollama", "serve"],
+        ["/bin/ollama", "serve"],
         stdout=log_file,
         stderr=subprocess.STDOUT,
         env={**os.environ, "OLLAMA_HOST": "0.0.0.0:11434"}
