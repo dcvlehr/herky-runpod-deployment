@@ -1,146 +1,100 @@
 #!/usr/bin/env python3
 """
-RunPod Serverless Handler for Ollama
-Provides Ollama-compatible API for phi3:mini inference on GPU
+RunPod Serverless Handler for vLLM
+OpenAI-compatible API for LLM inference
 """
 
 import runpod
-import subprocess
-import requests
-import time
 import os
-import json
+import subprocess
+import time
+import requests
 
-# Start Ollama in background on first import
-print("Starting Ollama service...")
-with open("/tmp/ollama.log", "w") as log_file:
-    ollama_process = subprocess.Popen(
-        ["/bin/ollama", "serve"],
-        stdout=log_file,
-        stderr=subprocess.STDOUT,
-        env={**os.environ, "OLLAMA_HOST": "0.0.0.0:11434"}
-    )
+# Environment variables
+MODEL_NAME = os.environ.get("MODEL_NAME", "microsoft/Phi-3-mini-4k-instruct")
+VLLM_PORT = 8000
 
-# Wait for Ollama to be ready
-max_retries = 30
+# Start vLLM server in background
+print(f"Starting vLLM server with model: {MODEL_NAME}")
+vllm_process = subprocess.Popen([
+    "python3", "-m", "vllm.entrypoints.openai.api_server",
+    "--model", MODEL_NAME,
+    "--host", "0.0.0.0",
+    "--port", str(VLLM_PORT),
+    "--dtype", "auto",
+    "--max-model-len", "4096",
+    "--gpu-memory-utilization", "0.9"
+], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+# Wait for vLLM to be ready
+print("Waiting for vLLM server to start...")
+max_retries = 60
 for i in range(max_retries):
     try:
-        response = requests.get("http://localhost:11434/api/tags", timeout=1)
+        response = requests.get(f"http://localhost:{VLLM_PORT}/v1/models", timeout=2)
         if response.status_code == 200:
-            print(f"Ollama service started and ready (attempt {i+1})")
+            print(f"vLLM server ready (attempt {i+1})")
             break
     except:
-        time.sleep(1)
+        time.sleep(5)
 else:
-    print("WARNING: Ollama may not have started properly")
-    # Print logs for debugging
-    try:
-        with open("/tmp/ollama.log", "r") as f:
-            print("Ollama logs:", f.read())
-    except:
-        pass
-
-# Track if models are pulled
-models_pulled = False
-
-
-def pull_models():
-    """Verify models are available (already pulled in Dockerfile)"""
-    global models_pulled
-    if not models_pulled:
-        print("Verifying phi3:mini model is available...")
-        # Model already pulled during image build, just verify it exists
-        try:
-            result = subprocess.run(
-                ["ollama", "list"],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            print(f"Available models:\n{result.stdout}")
-            models_pulled = True
-            print("Models ready")
-        except Exception as e:
-            print(f"Warning: Could not list models: {e}")
-            models_pulled = True  # Continue anyway since model is pre-pulled
+    print("ERROR: vLLM server failed to start")
+    raise Exception("vLLM server startup timeout")
 
 
 def handler(job):
     """
-    RunPod serverless handler
-    Accepts Ollama-compatible API requests and forwards to local Ollama
+    RunPod handler - forwards requests to local vLLM OpenAI server
     """
     try:
-        # Ensure models are pulled
-        pull_models()
-
         job_input = job.get("input", {})
 
-        # Support both direct prompt and Ollama API format
-        if "prompt" in job_input:
-            # Simple format: {"prompt": "text", "model": "phi3:mini"}
+        # Extract parameters
+        messages = job_input.get("messages", [])
+        if not messages:
+            # Support simple prompt format
             prompt = job_input.get("prompt", "")
-            model = job_input.get("model", "phi3:mini")
-            stream = job_input.get("stream", False)
+            if prompt:
+                messages = [{"role": "user", "content": prompt}]
+            else:
+                return {"error": "No messages or prompt provided"}
 
-            payload = {
-                "model": model,
-                "prompt": prompt,
-                "stream": stream
-            }
-            endpoint = "http://localhost:11434/api/generate"
+        model = job_input.get("model", MODEL_NAME)
+        max_tokens = job_input.get("max_tokens", 512)
+        temperature = job_input.get("temperature", 0.7)
+        stream = job_input.get("stream", False)
 
-        elif "messages" in job_input:
-            # Chat format: {"messages": [...], "model": "phi3:mini"}
-            messages = job_input.get("messages", [])
-            model = job_input.get("model", "phi3:mini")
-            stream = job_input.get("stream", False)
+        # Call local vLLM OpenAI server
+        payload = {
+            "model": model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "stream": stream
+        }
 
-            payload = {
-                "model": model,
-                "messages": messages,
-                "stream": stream
-            }
-            endpoint = "http://localhost:11434/api/chat"
-
-        else:
-            return {
-                "error": "Invalid input format. Expected 'prompt' or 'messages' field."
-            }
-
-        # Call Ollama API
-        print(f"Calling Ollama API: {endpoint}")
-        print(f"Payload: {payload}")
+        print(f"Sending request to vLLM: {len(messages)} messages")
         response = requests.post(
-            endpoint,
+            f"http://localhost:{VLLM_PORT}/v1/chat/completions",
             json=payload,
-            timeout=60  # Increased timeout for inference
+            timeout=120
         )
 
         if response.status_code == 200:
             result = response.json()
-            print(f"Success: Generated response")
+            print("Successfully generated response")
             return result
         else:
-            error_msg = f"Ollama API error: {response.status_code} - {response.text}"
+            error_msg = f"vLLM error: {response.status_code} - {response.text}"
             print(error_msg)
             return {"error": error_msg}
 
     except Exception as e:
         error_msg = f"Handler error: {str(e)}"
         print(error_msg)
-
-        # Print Ollama logs for debugging
-        try:
-            with open("/tmp/ollama.log", "r") as f:
-                print("=== Ollama logs ===")
-                print(f.read())
-        except Exception as log_error:
-            print(f"Could not read Ollama logs: {log_error}")
-
         return {"error": error_msg}
 
 
-# Start the RunPod serverless handler
-print("Starting RunPod handler...")
+# Start RunPod serverless worker
+print("Starting RunPod serverless worker...")
 runpod.serverless.start({"handler": handler})
